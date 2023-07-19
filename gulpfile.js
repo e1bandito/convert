@@ -1,40 +1,106 @@
-const gulp = require('gulp');
-const del = require('del');
-const squoosh = require('gulp-squoosh');
+const { parallel, src, dest } = require('gulp');
+const squoosh = require('gulp-libsquoosh');
 const path = require('path');
 const argv = require('yargs').argv;
 const rename = require('gulp-rename');
 
-// convert img
-gulp.task('convert', (done) => {
-  const arr = process.argv.splice(3);
-  console.log(arr);
+const arr = process.argv.splice(3);
+let width = +arr[1];
 
-  let prOpt = {
-    resize: {
-      width: +arr[1],
-    },
-  };
-  gulp
-    .src(['img/**/*.{png,jpg}'])
+function convert() {
+  return src(['./img/**/*.{png,jpg}'])
     .pipe(
-      squoosh(({ filePath }) => ({
-        preprocessOptions: prOpt,
-        encodeOptions: {
-          webp: {},
-          ...(path.extname(filePath) === '.png'
-            ? { oxipng: {} }
-            : { mozjpeg: {} }),
-        },
-      })),
+      squoosh((src) => {
+        const extname = path.extname(src.path);
+        let options = {
+          encodeOptions: squoosh.DefaultEncodeOptions[extname],
+        };
+
+        if (extname === '.jpg') {
+          options = {
+            encodeOptions: {
+              webp: {},
+              mozjpeg: {},
+            },
+            preprocessOptions: {
+              resize: {
+                width: width,
+              }
+            }
+          };
+        }
+
+        if (extname === '.png') {
+          options = {
+            encodeOptions: {
+              webp: {},
+              oxipng: {}
+            },
+            preprocessOptions: {
+              quant: {
+                enabled: true,
+                numColors: 16,
+              },
+              resize: {
+                width: width,
+              }
+            },
+          };
+        }
+
+        return options;
+      })
     )
     .pipe(rename({ suffix: arr[0].replace('--', '-') }))
-    .pipe(gulp.dest('output'));
+    .pipe(dest('./output'));
+}
 
-  done();
-});
+function convert2x() {
+  return src(['./img/**/*.{png,jpg}'])
+    .pipe(
+      squoosh((src) => {
+        const extname = path.extname(src.path);
+        let options = {
+          encodeOptions: squoosh.DefaultEncodeOptions[extname],
+        };
 
-// clean images
-gulp.task('clean', () => {
-  return del('output');
-});
+        if (extname === '.jpg') {
+          options = {
+            encodeOptions: {
+              webp: {},
+              mozjpeg: {},
+            },
+            preprocessOptions: {
+              resize: {
+                width: width * 2,
+              }
+            }
+          };
+        }
+
+        if (extname === '.png') {
+          options = {
+            encodeOptions: {
+              webp: {},
+              oxipng: {}
+            },
+            preprocessOptions: {
+              quant: {
+                enabled: true,
+                numColors: 16,
+              },
+              resize: {
+                width: width * 2,
+              }
+            },
+          };
+        }
+
+        return options;
+      })
+    )
+    .pipe(rename({ suffix: arr[0].replace('--', '-') + '@2x' }))
+    .pipe(dest('./output'));
+}
+
+exports.convert = parallel(convert, convert2x);
